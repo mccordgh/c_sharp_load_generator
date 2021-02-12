@@ -37,7 +37,7 @@ namespace LoadGenerator_Swaroop_Project
         static void InitRequestOptions()
         {
             // TODO: Set these values via command line args?
-            TransactionsPerSecond = 200;
+            TransactionsPerSecond = 999;
             MaxOutstandingRequests = 1000;
             ConsoleOutPutFrequency = 500;
             TransactionsPerBatch = 5;
@@ -45,8 +45,10 @@ namespace LoadGenerator_Swaroop_Project
 
         static void InitConsoleOutput()
         {
+            Console.CursorVisible = false;
+            Console.Clear();
             // Keep reference so it doesnt get disposed
-            OutputTimer = new Timer(_ => BuildConsoleOutput(), null, 0, ConsoleOutPutFrequency);
+            OutputTimer = new Timer(_ => UpdateConsoleOutput(), null, 0, ConsoleOutPutFrequency);
         }
 
         static List<string> BuildOutputForEachRequestStatus(out int totalRequestsCompleted)
@@ -76,7 +78,7 @@ namespace LoadGenerator_Swaroop_Project
             return new string(' ', maxNumberLength - number.ToString().Length);
         }
 
-        static void BuildConsoleOutput()
+        static void UpdateConsoleOutput()
         {
             RequestTasks = RequestTasks.FindAll(t => t.Status != TaskStatus.RanToCompletion);
 
@@ -86,7 +88,7 @@ namespace LoadGenerator_Swaroop_Project
             int tasksCount = RequestTasks.Count;
             int totalRequestsCreated = tasksCount + TotalRequestsFaulted + TotalRequestsCancelled + totalRequestsCompleted;
 
-            Console.Clear();
+            Console.SetCursorPosition(0, 0);
 
             Console.WriteLine(string.Format("Created                                 : {0}{1}", GetSpacerString(totalRequestsCreated), totalRequestsCreated));
             Console.WriteLine(string.Format("  Completed                  : {0}{1}", GetSpacerString(totalRequestsCompleted), totalRequestsCompleted));
@@ -148,16 +150,11 @@ namespace LoadGenerator_Swaroop_Project
 
         static void CleanUp(string msg)
         {
+            Console.CursorVisible = true;
+
             OutputTimer.Dispose();
-            
-            foreach (Task task in RequestTasks)
-            {
-                task.Dispose();
-            }
 
-            RequestTasks = null;
-
-            Console.WriteLine(msg);
+            Console.WriteLine($"\n\n{msg}");
             Console.WriteLine("\nPress any key to continue.");
             Console.ReadKey();
         }
