@@ -1,10 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Net.Http;
-using System.Runtime.InteropServices;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -21,6 +18,7 @@ namespace LoadGenerator_Swaroop_Project
         static int TransactionsPerSecond;
         static int TransactionsPerBatch;
 
+        static int OneSecond = 1000;
         static int TotalRequestsCancelled = 0;
         static int TotalRequestsFaulted = 0;
 
@@ -39,7 +37,7 @@ namespace LoadGenerator_Swaroop_Project
         static void InitRequestOptions()
         {
             // TODO: Set these values via command line args?
-            TransactionsPerSecond = 60;
+            TransactionsPerSecond = 200;
             MaxOutstandingRequests = 1000;
             ConsoleOutPutFrequency = 500;
             TransactionsPerBatch = 5;
@@ -47,6 +45,7 @@ namespace LoadGenerator_Swaroop_Project
 
         static void InitConsoleOutput()
         {
+            // Keep reference so it doesnt get disposed
             OutputTimer = new Timer(_ => BuildConsoleOutput(), null, 0, ConsoleOutPutFrequency);
         }
 
@@ -127,10 +126,6 @@ namespace LoadGenerator_Swaroop_Project
                         {
                             AddRequestToCompletedRequests(response.StatusCode);
                         }
-                        else
-                        {
-                            Console.WriteLine(response.StatusCode);
-                        }
                     }
                     catch (WebException ex)
                     {
@@ -169,8 +164,7 @@ namespace LoadGenerator_Swaroop_Project
 
         static void LoadGeneratorLoop()
         {
-            int oneSecond = 1000;
-            double waitTime = (oneSecond / TransactionsPerSecond) * TransactionsPerBatch;
+            double waitTime = (OneSecond / TransactionsPerSecond) * TransactionsPerBatch;
 
             bool running = true;
 
