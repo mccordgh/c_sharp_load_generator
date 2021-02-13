@@ -37,7 +37,7 @@ namespace LoadGenerator_Swaroop_Project
         static void InitRequestOptions()
         {
             // TODO: Set these values via command line args?
-            TransactionsPerSecond = 999;
+            TransactionsPerSecond = 100;
             MaxOutstandingRequests = 1000;
             ConsoleOutPutFrequency = 500;
             TransactionsPerBatch = 5;
@@ -163,9 +163,7 @@ namespace LoadGenerator_Swaroop_Project
         {
             double waitTime = (OneSecond / TransactionsPerSecond) * TransactionsPerBatch;
 
-            bool running = true;
-
-            while (running)
+            while (true)
             {
                 if ((RequestTasks.Count + TransactionsPerBatch) > MaxOutstandingRequests)
                 {
