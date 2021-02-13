@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
@@ -17,14 +19,18 @@ namespace LoadGenerator_Swaroop_Project
         static int MaxOutstandingRequests;
         static int TransactionsPerSecond;
         static int TransactionsPerBatch;
+        static int DesiredTransactionsPerSecond;
+        static int BatchesPerSecond;
 
         static int OneSecond = 1000;
         static int TotalRequestsCancelled = 0;
         static int TotalRequestsFaulted = 0;
 
+        static int LastCompletedRequestsCount = 0;
+
         static Timer OutputTimer;
 
-        static Dictionary<HttpStatusCode, int> CompletedRequests = new Dictionary<HttpStatusCode, int>();
+        static ConcurrentDictionary<HttpStatusCode, int> CompletedRequests = new ConcurrentDictionary<HttpStatusCode, int>();
         static List<Task> RequestTasks = new List<Task>();
 
         static void Main(string[] args)
@@ -37,10 +43,17 @@ namespace LoadGenerator_Swaroop_Project
         static void InitRequestOptions()
         {
             // TODO: Set these values via command line args?
-            TransactionsPerSecond = 100;
+            BatchesPerSecond = 20;
+            DesiredTransactionsPerSecond = 800;
+            TransactionsPerSecond = DesiredTransactionsPerSecond;
             MaxOutstandingRequests = 1000;
             ConsoleOutPutFrequency = 500;
-            TransactionsPerBatch = 5;
+            TransactionsPerBatch = CalculateTransactionsPerBatch();
+        }
+
+        static int CalculateTransactionsPerBatch()
+        {
+            return TransactionsPerSecond / BatchesPerSecond;
         }
 
         static void InitConsoleOutput()
@@ -54,16 +67,17 @@ namespace LoadGenerator_Swaroop_Project
         static List<string> BuildOutputForEachRequestStatus(out int totalRequestsCompleted)
         {
             List<string> outputForEachRequestStatus = new List<string>();
-            List<HttpStatusCode> completedRequestKeys = new List<HttpStatusCode>(CompletedRequests.Keys);
+            //List<HttpStatusCode> completedRequestKeys = new List<HttpStatusCode>(CompletedRequests.Keys);
 
             totalRequestsCompleted = 0;
 
-            foreach (HttpStatusCode key in completedRequestKeys)
+            foreach (KeyValuePair<HttpStatusCode, int> request in CompletedRequests)
             {
-                int value = CompletedRequests[key];
+                string key = request.Key.ToString();
+                int value = request.Value;
 
                 int spaceLength = 13;
-                string spaces = new string(' ', spaceLength - key.ToString().Length);
+                string spaces = new string(' ', spaceLength - key.Length);
 
                 outputForEachRequestStatus.Add(string.Format("    Status Code {0}{1}: {2}{3}", key, spaces, GetSpacerString(value), value));
                 totalRequestsCompleted += value;
@@ -75,7 +89,14 @@ namespace LoadGenerator_Swaroop_Project
         static string GetSpacerString(int number)
         {
             int maxNumberLength = 4;
-            return new string(' ', maxNumberLength - number.ToString().Length);
+            int spacerLength = maxNumberLength - number.ToString().Length;
+
+            if (spacerLength <= 0)
+            {
+                return "";
+            }
+
+            return new string(' ', spacerLength);
         }
 
         static void UpdateConsoleOutput()
@@ -87,6 +108,12 @@ namespace LoadGenerator_Swaroop_Project
 
             int tasksCount = RequestTasks.Count;
             int totalRequestsCreated = tasksCount + TotalRequestsFaulted + TotalRequestsCancelled + totalRequestsCompleted;
+
+            if (LastCompletedRequestsCount != CompletedRequests.Keys.Count)
+            {
+                LastCompletedRequestsCount = CompletedRequests.Keys.Count;
+                Console.Clear();
+            }
 
             Console.SetCursorPosition(0, 0);
 
@@ -111,7 +138,8 @@ namespace LoadGenerator_Swaroop_Project
             }
             else
             {
-                CompletedRequests.Add(code, 1);
+                // Need to check if successfully added / returned true?
+                CompletedRequests.TryAdd(code, 1);
             }
         }
 
@@ -154,6 +182,12 @@ namespace LoadGenerator_Swaroop_Project
 
             OutputTimer.Dispose();
 
+            foreach (Task task in RequestTasks)
+            {
+                task.Wait();
+                task.Dispose();
+            }
+
             Console.WriteLine($"\n\n{msg}");
             Console.WriteLine("\nPress any key to continue.");
             Console.ReadKey();
@@ -165,10 +199,28 @@ namespace LoadGenerator_Swaroop_Project
 
             while (true)
             {
+                // speed back up a little if we seem to have stabilized a bit
+                if (TransactionsPerSecond < DesiredTransactionsPerSecond && RequestTasks.Count <= MaxOutstandingRequests)
+                {
+                    int increaseBy = 5;
+
+                    if (TransactionsPerSecond + increaseBy > DesiredTransactionsPerSecond)
+                    {
+                        TransactionsPerSecond = DesiredTransactionsPerSecond;
+                    }
+                    else
+                    {
+                        TransactionsPerSecond += increaseBy;
+                    }
+                    TransactionsPerBatch = CalculateTransactionsPerBatch();
+                }
+
                 if ((RequestTasks.Count + TransactionsPerBatch) > MaxOutstandingRequests)
                 {
-                    CleanUp($"Terminating Load Generator. Max outstanding requests exceeded ({MaxOutstandingRequests}).");
-                    break;
+                    Debug.WriteLine($"Throttling {RequestTasks.Count} + {TransactionsPerBatch} > {MaxOutstandingRequests}");
+                    // slow down by 10% if we are exceeding MaxOutstandingRequests
+                    TransactionsPerSecond = (int)(TransactionsPerSecond * 0.9);
+                    TransactionsPerBatch = CalculateTransactionsPerBatch();
                 }
 
                 if (Console.KeyAvailable && Console.ReadKey().Key == ConsoleKey.Escape)
