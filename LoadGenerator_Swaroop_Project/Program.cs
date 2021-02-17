@@ -1,140 +1,12 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Net;
-using System.Net.Http;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace LoadGenerator_Swaroop_Project
 {
-    class Program
+    public class Program
     {
-        class ProgramClient
-        {
-            private HttpClient Client = new HttpClient();
-            private readonly string TestUrl = "https://devswarosh-bcdr-20210209.azureedge.net/test.txt";
-
-            public async Task<HttpResponseMessage> GetTestUrlAsync()
-            {
-                return await Client.GetAsync(TestUrl);
-            }
-        }
-
-        class RequestsManager
-        {
-            private readonly CancellationTokenSource CancellationSource = new CancellationTokenSource();
-            private readonly ProgramClient programClient;
-
-            public ConcurrentDictionary<HttpStatusCode, int> CompletedRequests = new ConcurrentDictionary<HttpStatusCode, int>();
-            public List<Task> RequestTasks = new List<Task>();
-
-            public int TotalRequestsCancelled = 0;
-            public int TotalRequestsFaulted = 0;
-            public int LastCompletedRequestsCount = 0;
-
-            public RequestsManager(ProgramClient client)
-            {
-                programClient = client;
-            }
-
-            public int TotalActiveRequests()
-            {
-                return RequestTasks.Count;
-            }
-
-            public void CleanupRequestTasks()
-            {
-                RequestTasks = RequestTasks.FindAll((task) => {
-                     if (task.Status == TaskStatus.RanToCompletion || task.Status == TaskStatus.Faulted || task.Status == TaskStatus.Canceled)
-                     {
-                         task.Dispose();
-                         return false;
-                     }
-
-                     return true;
-                 });
-            }
-
-            public void CancelAllRequests()
-            {
-                CancellationSource.Cancel();
-            }
-
-            public void EnqueueNewRequest()
-            {
-                RequestTasks.Add(
-                    Task.Run(async () =>
-                    {
-                        try
-                        {
-                            HttpResponseMessage response = await programClient.GetTestUrlAsync();
-
-                            if (response.StatusCode != 0)
-                            {
-                                CompletedRequests.AddOrUpdate(response.StatusCode, 1, (key, oldValue) => oldValue + 1);
-                            }
-                        }
-                        catch (WebException ex)
-                        {
-                            if (ex.Status == WebExceptionStatus.Timeout)
-                            {
-                                TotalRequestsCancelled += 1;
-                            }
-                            else
-                            {
-                                TotalRequestsFaulted += 1; // assuming everything else is categorized as "Faulted"
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            throw ex;
-                        }
-                    }, CancellationSource.Token)
-                );
-            }
-        }
-
-        class ConsoleConfig
-        {
-            public int MaxOutstandingRequests;
-            public int TransactionsPerSecond;
-            public int TransactionsPerBatch;
-            public int DesiredTransactionsPerSecond;
-            public int BatchesPerSecond;
-            public int RestoreTransactionsByAmount;
-
-            private Timer OutputTimer;
-
-            public ConsoleConfig(int batchesPerSecond, int desiredTransactionsPerSecond, int maxOutstandingRequests, Timer outputTimer)
-            {
-                BatchesPerSecond = batchesPerSecond;
-                DesiredTransactionsPerSecond = desiredTransactionsPerSecond;
-                TransactionsPerSecond = DesiredTransactionsPerSecond;
-                RestoreTransactionsByAmount = (int)(DesiredTransactionsPerSecond * 0.05); // 5 % at a time
-                MaxOutstandingRequests = maxOutstandingRequests;
-                OutputTimer = outputTimer;
-
-                UpdateTransactionsPerBatch();
-            }
-
-            public void ThrottleTransactionsPerSecond(double amount)
-            {
-                TransactionsPerSecond = (int)(TransactionsPerSecond * amount);
-            }
-
-            public void DisposeOutputTimer()
-            {
-                OutputTimer.Dispose();
-            }
-
-            public void UpdateTransactionsPerBatch()
-            {
-                TransactionsPerBatch = TransactionsPerSecond / BatchesPerSecond;
-            }
-        }
-
         class Constants
         {
             public static readonly string RequestsCreatedFormat =    "Created                                 : {0}{1}";
@@ -148,15 +20,19 @@ namespace LoadGenerator_Swaroop_Project
             public static readonly int SpacerStringMinLength = 4;
         }
 
-        public static readonly int OneSecond = 1000;
+        static readonly int OneSecond = 1000;
+        static Timer OutputTimer;
 
         static RequestsManager requestsManager;
         static ConsoleConfig config;
 
         static void Main()
         {
-            requestsManager = new RequestsManager(new ProgramClient());
-            config = new ConsoleConfig(20, 50, 1000, InitConsoleOutputTimer(500));
+            requestsManager = new RequestsManager(new ProgramClient("https://devswarosh-bcdr-20210209.azureedge.net/test.txt"));
+            config = new ConsoleConfig(20, 50, 1000);
+
+            // Keep reference so timer doesnt get garbage collected
+            OutputTimer = InitConsoleOutputTimer(500);
 
             RunGeneratorLoop();
         }
@@ -166,7 +42,6 @@ namespace LoadGenerator_Swaroop_Project
             Console.CursorVisible = false;
             Console.Clear();
 
-            // Keep reference so timer doesnt get garbage collected
             return new Timer(_ => UpdateConsoleOutput(), null, 0, outputFrequency);
         }
 
@@ -212,12 +87,6 @@ namespace LoadGenerator_Swaroop_Project
             int tasksCount = requestsManager.TotalActiveRequests();
             int totalRequestsCreated = tasksCount + requestsManager.TotalRequestsFaulted + requestsManager.TotalRequestsCancelled + totalRequestsCompleted;
 
-            //if (LastCompletedRequestsCount != CompletedRequests.Keys.Count)
-            //{
-            //    LastCompletedRequestsCount = CompletedRequests.Keys.Count;
-            //    Console.Clear();
-            //}
-
             Console.SetCursorPosition(0, 0);
 
             Console.WriteLine(string.Format(Constants.RequestsCreatedFormat, GetSpacerString(totalRequestsCreated), totalRequestsCreated));
@@ -236,7 +105,7 @@ namespace LoadGenerator_Swaroop_Project
         static void FinalCleanUp()
         {
             requestsManager.CancelAllRequests();
-            config.DisposeOutputTimer();
+            OutputTimer.Dispose();
 
             Console.CursorVisible = true;
             Console.WriteLine("\nPress any key to continue.");

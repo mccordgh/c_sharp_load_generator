@@ -7,6 +7,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LoadGenerator_Swaroop_Proje
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnitTestLoadGenerator", "UnitTestLoadGenerator\UnitTestLoadGenerator.csproj", "{0134E98C-923C-4B77-B02D-43FB256DA96C}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LoadGeneratorTests", "LoadGeneratorTests\LoadGeneratorTests.csproj", "{1A17C152-8D1C-4B13-B751-2BB96BB1B78E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -21,6 +23,10 @@ Global
 		{0134E98C-923C-4B77-B02D-43FB256DA96C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0134E98C-923C-4B77-B02D-43FB256DA96C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0134E98C-923C-4B77-B02D-43FB256DA96C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1A17C152-8D1C-4B13-B751-2BB96BB1B78E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1A17C152-8D1C-4B13-B751-2BB96BB1B78E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1A17C152-8D1C-4B13-B751-2BB96BB1B78E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1A17C152-8D1C-4B13-B751-2BB96BB1B78E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
