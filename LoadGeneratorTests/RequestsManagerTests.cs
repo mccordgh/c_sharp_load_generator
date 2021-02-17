@@ -20,8 +20,8 @@ namespace LoadGeneratorTests
                 }
             );
 
-            ProgramClient client = new ProgramClient("test/url", mockHttp);
-            RequestsManager manager = new RequestsManager(client);
+            ProgramService service = new ProgramService("test/url", mockHttp);
+            RequestsManager manager = new RequestsManager(service);
 
             manager.EnqueueNewRequest();
             Assert.AreEqual(1, manager.TotalActiveRequests());

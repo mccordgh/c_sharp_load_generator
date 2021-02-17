@@ -11,7 +11,7 @@ namespace LoadGenerator_Swaroop_Project
     public class RequestsManager
     {
         private readonly CancellationTokenSource CancellationSource = new CancellationTokenSource();
-        private readonly ProgramClient programClient;
+        private readonly ProgramService Service;
 
         public ConcurrentDictionary<HttpStatusCode, int> CompletedRequests = new ConcurrentDictionary<HttpStatusCode, int>();
         public List<Task> RequestTasks = new List<Task>();
@@ -20,9 +20,9 @@ namespace LoadGenerator_Swaroop_Project
         public int TotalRequestsFaulted = 0;
         public int LastCompletedRequestsCount = 0;
 
-        public RequestsManager(ProgramClient client)
+        public RequestsManager(ProgramService service)
         {
-            programClient = client;
+            Service = service;
         }
 
         public int TotalActiveRequests()
@@ -33,6 +33,11 @@ namespace LoadGenerator_Swaroop_Project
         public void CleanupRequestTasks()
         {
             RequestTasks = RequestTasks.FindAll((task) => {
+                if (task == null)
+                {
+                    return false;
+                }
+
                 if (task.Status == TaskStatus.RanToCompletion || task.Status == TaskStatus.Faulted || task.Status == TaskStatus.Canceled)
                 {
                     task.Dispose();
@@ -55,7 +60,7 @@ namespace LoadGenerator_Swaroop_Project
                 {
                     try
                     {
-                        HttpResponseMessage response = await programClient.GetTestUrlAsync();
+                        HttpResponseMessage response = await Service.GetTestUrlAsync();
 
                         if (response.StatusCode != 0)
                         {

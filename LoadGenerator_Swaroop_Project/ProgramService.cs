@@ -23,12 +23,12 @@ namespace LoadGenerator_Swaroop_Project
         }
     }
 
-    public class ProgramClient
+    public class ProgramService
     {
         private readonly IHttpClient Client;
-        private string TestUrl;
+        private readonly string TestUrl;
 
-        public ProgramClient(string url, IHttpClient client)
+        public ProgramService(string url, IHttpClient client)
         {
             Client = client;
             TestUrl = url;

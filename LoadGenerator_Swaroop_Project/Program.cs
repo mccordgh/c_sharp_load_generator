@@ -10,6 +10,8 @@ namespace LoadGenerator_Swaroop_Project
     {
         public class Constants
         {
+            public static readonly string TestUrl = "https://devswarosh-bcdr-20210209.azureedge.net/test.txt";
+
             public static readonly string RequestsCreatedFormat =    "Created                                 : {0}{1}";
             public static readonly string RequestsCompletedFormat =  "  Completed                  : {0}{1}";
             public static readonly string RequestsFaultedFormat =    "    Faulted                  : {0}{1}";
@@ -17,28 +19,31 @@ namespace LoadGenerator_Swaroop_Project
             public static readonly string RequestsCancelledFormat =  "    Cancelled                : {0}{1}";
             public static readonly string RequestsActiveFormat =     "  Active Requests                       : {0}{1}";
 
+            public static readonly int ConsoleUpdateInterval = 500;
             public static readonly int RequestsStatusSpacer = 13;
             public static readonly int SpacerStringMinLength = 4;
+            public static readonly int OneSecond = 1000;
+
+            public static readonly double TransactionsThrottleAmount = 0.9;
         }
 
-        static readonly int OneSecond = 1000;
-        static Timer OutputTimer;
-
-        static RequestsManager requestsManager;
         static ConsoleConfig config;
+        static RequestsManager requestsManager;
+        static Timer outputTimer;
 
         static void Main()
         {
-            requestsManager = new RequestsManager(new ProgramClient("https://devswarosh-bcdr-20210209.azureedge.net/test.txt", new ProgramHttpClient()));
+            ProgramService service = new ProgramService(Constants.TestUrl, new ProgramHttpClient());
+            requestsManager = new RequestsManager(service);
             config = new ConsoleConfig
             {
-                BatchesPerSecond = 20,
-                DesiredTransactionsPerSecond = 380,
-                MaxOutstandingRequests = 1000,
+                BatchesPerSecond = 25,
+                DesiredTransactionsPerSecond = 700,
+                MaxOutstandingRequests = 5000,
             };
 
             // Keep reference so timer doesnt get garbage collected
-            OutputTimer = InitConsoleOutputTimer(500);
+            outputTimer = InitConsoleOutputTimer(Constants.ConsoleUpdateInterval);
 
             RunGeneratorLoop();
         }
@@ -111,7 +116,7 @@ namespace LoadGenerator_Swaroop_Project
         static void FinalCleanUp()
         {
             requestsManager.CancelAllRequests();
-            OutputTimer.Dispose();
+            outputTimer.Dispose();
 
             Console.CursorVisible = true;
             Console.WriteLine("\nPress any key to continue.");
@@ -120,7 +125,7 @@ namespace LoadGenerator_Swaroop_Project
 
         static void RunGeneratorLoop()
         {
-            double waitTime = (OneSecond / config.TransactionsPerSecond) * config.TransactionsPerBatch;
+            double waitTime = (Constants.OneSecond / config.TransactionsPerSecond) * config.TransactionsPerBatch;
 
             while (true)
             {
@@ -135,12 +140,13 @@ namespace LoadGenerator_Swaroop_Project
                     {
                         config.TransactionsPerSecond += config.RestoreTransactionsByAmount;
                     }
+
                     config.UpdateTransactionsPerBatch();
                 }
 
                 if ((requestsManager.TotalActiveRequests() + config.TransactionsPerBatch) > config.MaxOutstandingRequests)
                 {
-                    config.ThrottleTransactionsPerSecond(0.95);
+                    config.ThrottleTransactionsPerSecond(Constants.TransactionsThrottleAmount);
                     config.UpdateTransactionsPerBatch();
                 }
 

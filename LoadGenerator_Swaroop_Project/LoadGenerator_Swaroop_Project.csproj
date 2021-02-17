@@ -45,7 +45,7 @@
   <ItemGroup>
     <Compile Include="ConsoleConfig.cs" />
     <Compile Include="Program.cs" />
-    <Compile Include="ProgramClient.cs" />
+    <Compile Include="ProgramService.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="RequestsManager.cs" />
   </ItemGroup>
