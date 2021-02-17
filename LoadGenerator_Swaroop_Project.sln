@@ -5,8 +5,6 @@ VisualStudioVersion = 16.0.30907.101
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LoadGenerator_Swaroop_Project", "LoadGenerator_Swaroop_Project\LoadGenerator_Swaroop_Project.csproj", "{884C11A1-7A63-4D84-95BE-35724E5C5D60}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UnitTestLoadGenerator", "UnitTestLoadGenerator\UnitTestLoadGenerator.csproj", "{0134E98C-923C-4B77-B02D-43FB256DA96C}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LoadGeneratorTests", "LoadGeneratorTests\LoadGeneratorTests.csproj", "{1A17C152-8D1C-4B13-B751-2BB96BB1B78E}"
 EndProject
 Global
@@ -19,10 +17,6 @@ Global
 		{884C11A1-7A63-4D84-95BE-35724E5C5D60}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{884C11A1-7A63-4D84-95BE-35724E5C5D60}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{884C11A1-7A63-4D84-95BE-35724E5C5D60}.Release|Any CPU.Build.0 = Release|Any CPU
-		{0134E98C-923C-4B77-B02D-43FB256DA96C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{0134E98C-923C-4B77-B02D-43FB256DA96C}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{0134E98C-923C-4B77-B02D-43FB256DA96C}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{0134E98C-923C-4B77-B02D-43FB256DA96C}.Release|Any CPU.Build.0 = Release|Any CPU
 		{1A17C152-8D1C-4B13-B751-2BB96BB1B78E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{1A17C152-8D1C-4B13-B751-2BB96BB1B78E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{1A17C152-8D1C-4B13-B751-2BB96BB1B78E}.Release|Any CPU.ActiveCfg = Release|Any CPU

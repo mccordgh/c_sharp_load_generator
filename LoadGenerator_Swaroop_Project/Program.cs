@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Net;
 using System.Threading;
 
@@ -7,7 +8,7 @@ namespace LoadGenerator_Swaroop_Project
 {
     public class Program
     {
-        class Constants
+        public class Constants
         {
             public static readonly string RequestsCreatedFormat =    "Created                                 : {0}{1}";
             public static readonly string RequestsCompletedFormat =  "  Completed                  : {0}{1}";
@@ -28,8 +29,13 @@ namespace LoadGenerator_Swaroop_Project
 
         static void Main()
         {
-            requestsManager = new RequestsManager(new ProgramClient("https://devswarosh-bcdr-20210209.azureedge.net/test.txt"));
-            config = new ConsoleConfig(20, 50, 1000);
+            requestsManager = new RequestsManager(new ProgramClient("https://devswarosh-bcdr-20210209.azureedge.net/test.txt", new ProgramHttpClient()));
+            config = new ConsoleConfig
+            {
+                BatchesPerSecond = 20,
+                DesiredTransactionsPerSecond = 380,
+                MaxOutstandingRequests = 1000,
+            };
 
             // Keep reference so timer doesnt get garbage collected
             OutputTimer = InitConsoleOutputTimer(500);
@@ -45,13 +51,13 @@ namespace LoadGenerator_Swaroop_Project
             return new Timer(_ => UpdateConsoleOutput(), null, 0, outputFrequency);
         }
 
-        static List<string> BuildOutputForEachRequestStatus(out int totalRequestsCompleted)
+       public static List<string> BuildOutputForEachRequestStatus(ConcurrentDictionary<HttpStatusCode, int> completedRequests, out int totalRequestsCompleted)
         {
             List<string> outputForEachRequestStatus = new List<string>();
 
             totalRequestsCompleted = 0;
 
-            foreach (KeyValuePair<HttpStatusCode, int> request in requestsManager.CompletedRequests)
+            foreach (KeyValuePair<HttpStatusCode, int> request in completedRequests)
             {
                 string key = request.Key.ToString();
                 int value = request.Value;
@@ -65,7 +71,7 @@ namespace LoadGenerator_Swaroop_Project
             return outputForEachRequestStatus;
         }
 
-        static string GetSpacerString(int number)
+        public static string GetSpacerString(int number)
         {
             int spacerLength = Constants.SpacerStringMinLength - number.ToString().Length;
 
@@ -82,7 +88,7 @@ namespace LoadGenerator_Swaroop_Project
             requestsManager.CleanupRequestTasks();
 
             int totalRequestsCompleted;
-            List<string> outputForEachRequestStatus = BuildOutputForEachRequestStatus(out totalRequestsCompleted);
+            List<string> outputForEachRequestStatus = BuildOutputForEachRequestStatus(requestsManager.CompletedRequests, out totalRequestsCompleted);
 
             int tasksCount = requestsManager.TotalActiveRequests();
             int totalRequestsCreated = tasksCount + requestsManager.TotalRequestsFaulted + requestsManager.TotalRequestsCancelled + totalRequestsCompleted;

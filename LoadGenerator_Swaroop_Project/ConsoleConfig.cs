@@ -16,7 +16,7 @@ namespace LoadGenerator_Swaroop_Project
             BatchesPerSecond = batchesPerSecond;
             DesiredTransactionsPerSecond = desiredTransactionsPerSecond;
             TransactionsPerSecond = DesiredTransactionsPerSecond;
-            RestoreTransactionsByAmount = (int)(DesiredTransactionsPerSecond * 0.05); // 5 % at a time
+            RestoreTransactionsByAmount = (int)(DesiredTransactionsPerSecond * 0.10);
             MaxOutstandingRequests = maxOutstandingRequests;
 
             UpdateTransactionsPerBatch();
