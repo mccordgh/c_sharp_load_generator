@@ -9,12 +9,11 @@ namespace LoadGeneratorTests
         [TestMethod]
         public void Test_ItInitializesCorrectly()
         {
-            ConsoleConfig config = new ConsoleConfig
-            {
-                BatchesPerSecond = 20,
-                DesiredTransactionsPerSecond = 200,
-                MaxOutstandingRequests = 1000
-            };
+            int batchesPerSecond = 20;
+            int desiredTransactionsPerSecond = 200;
+            int maxOutstandingRequests = 1000;
+
+            ConsoleConfig config = new ConsoleConfig(batchesPerSecond, desiredTransactionsPerSecond, maxOutstandingRequests);
 
             Assert.AreEqual(20, config.BatchesPerSecond);
             Assert.AreEqual(200, config.DesiredTransactionsPerSecond);
@@ -35,17 +34,13 @@ namespace LoadGeneratorTests
             Assert.AreEqual(expectedTransactionsPerSecond, config.TransactionsPerSecond);
         }
 
-        [DataRow(200, 20, 10)]
-        [DataRow(500, 30, 16)]
-        [DataRow(2000, 40, 50)]
+        [DataRow(20, 200, 1000, 10)]
+        [DataRow(30, 500, 2000, 16)]
+        [DataRow(40, 2000, 4500, 50)]
         [DataTestMethod]
-        public void Test_UpdateTransactionsPerBatch(int transactionsPerSecond, int batchesPerSecond, int expectedTransactionsPerBatch)
+        public void Test_UpdateTransactionsPerBatch(int batchesPerSecond, int desiredTransactionsPerSecond, int maxOutstandingRequests, int expectedTransactionsPerBatch)
         {
-            ConsoleConfig config = new ConsoleConfig
-            {
-                TransactionsPerSecond = transactionsPerSecond,
-                BatchesPerSecond = batchesPerSecond
-            };
+            ConsoleConfig config = new ConsoleConfig(batchesPerSecond, desiredTransactionsPerSecond, maxOutstandingRequests);
 
             config.UpdateTransactionsPerBatch();
 

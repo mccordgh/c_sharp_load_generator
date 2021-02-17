@@ -24,7 +24,7 @@ namespace LoadGenerator_Swaroop_Project
             public static readonly int SpacerStringMinLength = 4;
             public static readonly int OneSecond = 1000;
 
-            public static readonly double TransactionsThrottleAmount = 0.9;
+            public static readonly double TransactionsThrottleAmount = 0.85;
         }
 
         static ConsoleConfig config;
@@ -35,12 +35,7 @@ namespace LoadGenerator_Swaroop_Project
         {
             ProgramService service = new ProgramService(Constants.TestUrl, new ProgramHttpClient());
             requestsManager = new RequestsManager(service);
-            config = new ConsoleConfig
-            {
-                BatchesPerSecond = 25,
-                DesiredTransactionsPerSecond = 700,
-                MaxOutstandingRequests = 5000,
-            };
+            config = new ConsoleConfig(25, 800, 1000);
 
             // Keep reference so timer doesnt get garbage collected
             outputTimer = InitConsoleOutputTimer(Constants.ConsoleUpdateInterval);
@@ -92,8 +87,7 @@ namespace LoadGenerator_Swaroop_Project
         {
             requestsManager.CleanupRequestTasks();
 
-            int totalRequestsCompleted;
-            List<string> outputForEachRequestStatus = BuildOutputForEachRequestStatus(requestsManager.CompletedRequests, out totalRequestsCompleted);
+            List<string> outputForEachRequestStatus = BuildOutputForEachRequestStatus(requestsManager.CompletedRequests, out int totalRequestsCompleted);
 
             int tasksCount = requestsManager.TotalActiveRequests();
             int totalRequestsCreated = tasksCount + requestsManager.TotalRequestsFaulted + requestsManager.TotalRequestsCancelled + totalRequestsCompleted;
