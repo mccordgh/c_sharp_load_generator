@@ -11,75 +11,179 @@ namespace LoadGenerator_Swaroop_Project
 {
     class Program
     {
-        static HttpClient client = new HttpClient();
-
-        static string TestUrl = "https://devswarosh-bcdr-20210209.azureedge.net/test.txt";
-
-        static int ConsoleOutPutFrequency;
-        static int MaxOutstandingRequests;
-        static int TransactionsPerSecond;
-        static int TransactionsPerBatch;
-        static int DesiredTransactionsPerSecond;
-        static int BatchesPerSecond;
-
-        static int OneSecond = 1000;
-        static int TotalRequestsCancelled = 0;
-        static int TotalRequestsFaulted = 0;
-
-        static int LastCompletedRequestsCount = 0;
-
-        static Timer OutputTimer;
-
-        static ConcurrentDictionary<HttpStatusCode, int> CompletedRequests = new ConcurrentDictionary<HttpStatusCode, int>();
-        static List<Task> RequestTasks = new List<Task>();
-
-        static void Main(string[] args)
+        class ProgramClient
         {
-            InitRequestOptions();
-            InitConsoleOutput();
-            LoadGeneratorLoop();
+            private HttpClient Client = new HttpClient();
+            private readonly string TestUrl = "https://devswarosh-bcdr-20210209.azureedge.net/test.txt";
+
+            public async Task<HttpResponseMessage> GetTestUrlAsync()
+            {
+                return await Client.GetAsync(TestUrl);
+            }
         }
 
-        static void InitRequestOptions()
+        class RequestsManager
         {
-            // TODO: Set these values via command line args?
-            BatchesPerSecond = 20;
-            DesiredTransactionsPerSecond = 800;
-            TransactionsPerSecond = DesiredTransactionsPerSecond;
-            MaxOutstandingRequests = 1000;
-            ConsoleOutPutFrequency = 500;
-            TransactionsPerBatch = CalculateTransactionsPerBatch();
+            private readonly CancellationTokenSource CancellationSource = new CancellationTokenSource();
+            private readonly ProgramClient programClient;
+
+            public ConcurrentDictionary<HttpStatusCode, int> CompletedRequests = new ConcurrentDictionary<HttpStatusCode, int>();
+            public List<Task> RequestTasks = new List<Task>();
+
+            public int TotalRequestsCancelled = 0;
+            public int TotalRequestsFaulted = 0;
+            public int LastCompletedRequestsCount = 0;
+
+            public RequestsManager(ProgramClient client)
+            {
+                programClient = client;
+            }
+
+            public int TotalActiveRequests()
+            {
+                return RequestTasks.Count;
+            }
+
+            public void CleanupRequestTasks()
+            {
+                RequestTasks = RequestTasks.FindAll((task) => {
+                     if (task.Status == TaskStatus.RanToCompletion || task.Status == TaskStatus.Faulted || task.Status == TaskStatus.Canceled)
+                     {
+                         task.Dispose();
+                         return false;
+                     }
+
+                     return true;
+                 });
+            }
+
+            public void CancelAllRequests()
+            {
+                CancellationSource.Cancel();
+            }
+
+            public void EnqueueNewRequest()
+            {
+                RequestTasks.Add(
+                    Task.Run(async () =>
+                    {
+                        try
+                        {
+                            HttpResponseMessage response = await programClient.GetTestUrlAsync();
+
+                            if (response.StatusCode != 0)
+                            {
+                                CompletedRequests.AddOrUpdate(response.StatusCode, 1, (key, oldValue) => oldValue + 1);
+                            }
+                        }
+                        catch (WebException ex)
+                        {
+                            if (ex.Status == WebExceptionStatus.Timeout)
+                            {
+                                TotalRequestsCancelled += 1;
+                            }
+                            else
+                            {
+                                TotalRequestsFaulted += 1; // assuming everything else is categorized as "Faulted"
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            throw ex;
+                        }
+                    }, CancellationSource.Token)
+                );
+            }
         }
 
-        static int CalculateTransactionsPerBatch()
+        class ConsoleConfig
         {
-            return TransactionsPerSecond / BatchesPerSecond;
+            public int MaxOutstandingRequests;
+            public int TransactionsPerSecond;
+            public int TransactionsPerBatch;
+            public int DesiredTransactionsPerSecond;
+            public int BatchesPerSecond;
+            public int RestoreTransactionsByAmount;
+
+            private Timer OutputTimer;
+
+            public ConsoleConfig(int batchesPerSecond, int desiredTransactionsPerSecond, int maxOutstandingRequests, Timer outputTimer)
+            {
+                BatchesPerSecond = batchesPerSecond;
+                DesiredTransactionsPerSecond = desiredTransactionsPerSecond;
+                TransactionsPerSecond = DesiredTransactionsPerSecond;
+                RestoreTransactionsByAmount = (int)(DesiredTransactionsPerSecond * 0.05); // 5 % at a time
+                MaxOutstandingRequests = maxOutstandingRequests;
+                OutputTimer = outputTimer;
+
+                UpdateTransactionsPerBatch();
+            }
+
+            public void ThrottleTransactionsPerSecond(double amount)
+            {
+                TransactionsPerSecond = (int)(TransactionsPerSecond * amount);
+            }
+
+            public void DisposeOutputTimer()
+            {
+                OutputTimer.Dispose();
+            }
+
+            public void UpdateTransactionsPerBatch()
+            {
+                TransactionsPerBatch = TransactionsPerSecond / BatchesPerSecond;
+            }
         }
 
-        static void InitConsoleOutput()
+        class Constants
+        {
+            public static readonly string RequestsCreatedFormat =    "Created                                 : {0}{1}";
+            public static readonly string RequestsCompletedFormat =  "  Completed                  : {0}{1}";
+            public static readonly string RequestsFaultedFormat =    "    Faulted                  : {0}{1}";
+            public static readonly string RequestsStatusFormat =     "    Status Code {0}{1}: {2}{3}";
+            public static readonly string RequestsCancelledFormat =  "    Cancelled                : {0}{1}";
+            public static readonly string RequestsActiveFormat =     "  Active Requests                       : {0}{1}";
+
+            public static readonly int RequestsStatusSpacer = 13;
+            public static readonly int SpacerStringMinLength = 4;
+        }
+
+        public static readonly int OneSecond = 1000;
+
+        static RequestsManager requestsManager;
+        static ConsoleConfig config;
+
+        static void Main()
+        {
+            requestsManager = new RequestsManager(new ProgramClient());
+            config = new ConsoleConfig(20, 50, 1000, InitConsoleOutputTimer(500));
+
+            RunGeneratorLoop();
+        }
+
+        static Timer InitConsoleOutputTimer(int outputFrequency)
         {
             Console.CursorVisible = false;
             Console.Clear();
-            // Keep reference so it doesnt get disposed
-            OutputTimer = new Timer(_ => UpdateConsoleOutput(), null, 0, ConsoleOutPutFrequency);
+
+            // Keep reference so timer doesnt get garbage collected
+            return new Timer(_ => UpdateConsoleOutput(), null, 0, outputFrequency);
         }
 
         static List<string> BuildOutputForEachRequestStatus(out int totalRequestsCompleted)
         {
             List<string> outputForEachRequestStatus = new List<string>();
-            //List<HttpStatusCode> completedRequestKeys = new List<HttpStatusCode>(CompletedRequests.Keys);
 
             totalRequestsCompleted = 0;
 
-            foreach (KeyValuePair<HttpStatusCode, int> request in CompletedRequests)
+            foreach (KeyValuePair<HttpStatusCode, int> request in requestsManager.CompletedRequests)
             {
                 string key = request.Key.ToString();
                 int value = request.Value;
 
-                int spaceLength = 13;
-                string spaces = new string(' ', spaceLength - key.Length);
+                string spaces = new string(' ', Constants.RequestsStatusSpacer - key.Length);
 
-                outputForEachRequestStatus.Add(string.Format("    Status Code {0}{1}: {2}{3}", key, spaces, GetSpacerString(value), value));
+                outputForEachRequestStatus.Add(string.Format(Constants.RequestsStatusFormat, key, spaces, GetSpacerString(value), value));
                 totalRequestsCompleted += value;
             }
 
@@ -88,12 +192,11 @@ namespace LoadGenerator_Swaroop_Project
 
         static string GetSpacerString(int number)
         {
-            int maxNumberLength = 4;
-            int spacerLength = maxNumberLength - number.ToString().Length;
+            int spacerLength = Constants.SpacerStringMinLength - number.ToString().Length;
 
             if (spacerLength <= 0)
             {
-                return "";
+                return string.Empty;
             }
 
             return new string(' ', spacerLength);
@@ -101,137 +204,80 @@ namespace LoadGenerator_Swaroop_Project
 
         static void UpdateConsoleOutput()
         {
-            RequestTasks = RequestTasks.FindAll(t => t.Status != TaskStatus.RanToCompletion);
+            requestsManager.CleanupRequestTasks();
 
             int totalRequestsCompleted;
             List<string> outputForEachRequestStatus = BuildOutputForEachRequestStatus(out totalRequestsCompleted);
 
-            int tasksCount = RequestTasks.Count;
-            int totalRequestsCreated = tasksCount + TotalRequestsFaulted + TotalRequestsCancelled + totalRequestsCompleted;
+            int tasksCount = requestsManager.TotalActiveRequests();
+            int totalRequestsCreated = tasksCount + requestsManager.TotalRequestsFaulted + requestsManager.TotalRequestsCancelled + totalRequestsCompleted;
 
-            if (LastCompletedRequestsCount != CompletedRequests.Keys.Count)
-            {
-                LastCompletedRequestsCount = CompletedRequests.Keys.Count;
-                Console.Clear();
-            }
+            //if (LastCompletedRequestsCount != CompletedRequests.Keys.Count)
+            //{
+            //    LastCompletedRequestsCount = CompletedRequests.Keys.Count;
+            //    Console.Clear();
+            //}
 
             Console.SetCursorPosition(0, 0);
 
-            Console.WriteLine(string.Format("Created                                 : {0}{1}", GetSpacerString(totalRequestsCreated), totalRequestsCreated));
-            Console.WriteLine(string.Format("  Completed                  : {0}{1}", GetSpacerString(totalRequestsCompleted), totalRequestsCompleted));
-            Console.WriteLine(string.Format("    Faulted                  : {0}{1}", GetSpacerString(TotalRequestsFaulted), TotalRequestsFaulted));
-            Console.WriteLine(string.Format("    Cancelled                : {0}{1}", GetSpacerString(TotalRequestsCancelled), TotalRequestsCancelled));
+            Console.WriteLine(string.Format(Constants.RequestsCreatedFormat, GetSpacerString(totalRequestsCreated), totalRequestsCreated));
+            Console.WriteLine(string.Format(Constants.RequestsCompletedFormat, GetSpacerString(totalRequestsCompleted), totalRequestsCompleted));
+            Console.WriteLine(string.Format(Constants.RequestsFaultedFormat, GetSpacerString(requestsManager.TotalRequestsFaulted), requestsManager.TotalRequestsFaulted));
+            Console.WriteLine(string.Format(Constants.RequestsCancelledFormat, GetSpacerString(requestsManager.TotalRequestsCancelled), requestsManager.TotalRequestsCancelled));
 
             foreach (string output in outputForEachRequestStatus)
             {
                 Console.WriteLine(output);
             }
 
-            Console.WriteLine(string.Format("  Active Requests                       : {0}{1}", GetSpacerString(tasksCount), tasksCount));
+            Console.WriteLine(string.Format(Constants.RequestsActiveFormat, GetSpacerString(tasksCount), tasksCount));
         }
 
-        static void AddRequestToCompletedRequests(HttpStatusCode code)
+        static void FinalCleanUp()
         {
-            if (CompletedRequests.ContainsKey(code))
-            {
-                CompletedRequests[code] = CompletedRequests[code] + 1;
-            }
-            else
-            {
-                // Need to check if successfully added / returned true?
-                CompletedRequests.TryAdd(code, 1);
-            }
-        }
+            requestsManager.CancelAllRequests();
+            config.DisposeOutputTimer();
 
-        static void FireAndForgetRequest()
-        {
-            RequestTasks.Add(
-                Task.Run(async () =>
-                {
-                    try
-                    {
-                        HttpResponseMessage response = await client.GetAsync(TestUrl);
-
-                        if (response.StatusCode != 0)
-                        {
-                            AddRequestToCompletedRequests(response.StatusCode);
-                        }
-                    }
-                    catch (WebException ex)
-                    {
-                        if (ex.Status == WebExceptionStatus.Timeout)
-                        {
-                            TotalRequestsCancelled += 1;
-                        }
-                        else // assuming everything else is categorized as "Faulted"
-                        {
-                            TotalRequestsFaulted += 1;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        throw ex;
-                    }
-                })
-            );
-        }
-
-        static void CleanUp(string msg)
-        {
             Console.CursorVisible = true;
-
-            OutputTimer.Dispose();
-
-            foreach (Task task in RequestTasks)
-            {
-                task.Wait();
-                task.Dispose();
-            }
-
-            Console.WriteLine($"\n\n{msg}");
             Console.WriteLine("\nPress any key to continue.");
             Console.ReadKey();
         }
 
-        static void LoadGeneratorLoop()
+        static void RunGeneratorLoop()
         {
-            double waitTime = (OneSecond / TransactionsPerSecond) * TransactionsPerBatch;
+            double waitTime = (OneSecond / config.TransactionsPerSecond) * config.TransactionsPerBatch;
 
             while (true)
             {
                 // speed back up a little if we seem to have stabilized a bit
-                if (TransactionsPerSecond < DesiredTransactionsPerSecond && RequestTasks.Count <= MaxOutstandingRequests)
+                if (config.TransactionsPerSecond < config.DesiredTransactionsPerSecond && requestsManager.TotalActiveRequests() <= config.MaxOutstandingRequests)
                 {
-                    int increaseBy = 5;
-
-                    if (TransactionsPerSecond + increaseBy > DesiredTransactionsPerSecond)
+                    if (config.TransactionsPerSecond +  config.RestoreTransactionsByAmount > config.DesiredTransactionsPerSecond)
                     {
-                        TransactionsPerSecond = DesiredTransactionsPerSecond;
+                        config.TransactionsPerSecond = config.DesiredTransactionsPerSecond;
                     }
                     else
                     {
-                        TransactionsPerSecond += increaseBy;
+                        config.TransactionsPerSecond += config.RestoreTransactionsByAmount;
                     }
-                    TransactionsPerBatch = CalculateTransactionsPerBatch();
+                    config.UpdateTransactionsPerBatch();
                 }
 
-                if ((RequestTasks.Count + TransactionsPerBatch) > MaxOutstandingRequests)
+                if ((requestsManager.TotalActiveRequests() + config.TransactionsPerBatch) > config.MaxOutstandingRequests)
                 {
-                    Debug.WriteLine($"Throttling {RequestTasks.Count} + {TransactionsPerBatch} > {MaxOutstandingRequests}");
-                    // slow down by 10% if we are exceeding MaxOutstandingRequests
-                    TransactionsPerSecond = (int)(TransactionsPerSecond * 0.9);
-                    TransactionsPerBatch = CalculateTransactionsPerBatch();
+                    config.ThrottleTransactionsPerSecond(0.95);
+                    config.UpdateTransactionsPerBatch();
                 }
 
                 if (Console.KeyAvailable && Console.ReadKey().Key == ConsoleKey.Escape)
                 {
-                    CleanUp("Load Generator ended by user pressing Escape Key.");
+                    FinalCleanUp();
                     break;
                 }
 
-                for (int i = 0; i < TransactionsPerBatch; i += 1)
+                for (int i = 0; i < config.TransactionsPerBatch; i += 1)
                 {
-                    FireAndForgetRequest();
+                    requestsManager.EnqueueNewRequest();
                 }
 
                 Thread.Sleep((int)waitTime);
