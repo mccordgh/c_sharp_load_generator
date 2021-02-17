@@ -6,6 +6,22 @@ namespace LoadGeneratorTests
     [TestClass]
     public class ConsoleConfigTests
     {
+        [TestMethod]
+        public void Test_ItInitializesCorrectly()
+        {
+            ConsoleConfig config = new ConsoleConfig
+            {
+                BatchesPerSecond = 20,
+                DesiredTransactionsPerSecond = 200,
+                MaxOutstandingRequests = 1000
+            };
+
+            Assert.AreEqual(20, config.BatchesPerSecond);
+            Assert.AreEqual(200, config.DesiredTransactionsPerSecond);
+            Assert.AreEqual(1000, config.MaxOutstandingRequests);
+            Assert.AreEqual(config.DesiredTransactionsPerSecond, config.TransactionsPerSecond);
+        }
+
         [DataRow(10, 20, 30, 0.1, 2)]
         [DataRow(100, 200, 300, 0.5, 100)]
         [DataRow(500, 1000, 2000, 0.9, 900)]
